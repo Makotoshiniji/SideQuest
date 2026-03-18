@@ -18,12 +18,12 @@ type Message = {
 const generateResponse = async (prompt: string): Promise<string> => {
   try {
     const response = await fetch(
-      `/api/chat`, // เรียกใช้งาน Vercel Serverless Function แทน
+      `/api/chat`, // เปลี่ยนกลับไปใช้ Vercel API Endpoint ที่ถูกต้อง
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: prompt, // ส่งแค่ข้อความ prompt ไปให้ API ฝั่ง Backend จัดการต่อ
+          prompt: prompt,
         }),
       },
     );
