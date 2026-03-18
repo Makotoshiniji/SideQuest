@@ -7,18 +7,12 @@
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
-    "lint": "tsc --noEmit",
-    "deploy": "npm run build && firebase deploy --only hosting,functions",
-    "deploy:prod": "npm run build && firebase deploy --only hosting --message \"Production deployment\"",
-    "firebase:login": "firebase login",
-    "firebase:status": "firebase hosting:channel:list",
-    "firebase:releases": "firebase hosting:releases:list"
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
+    "@google/generative-ai": "^0.15.0",
     "better-sqlite3": "^12.4.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",

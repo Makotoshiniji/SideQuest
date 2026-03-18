@@ -26,8 +26,6 @@ import {
   updateUserProfile,
 } from "../services/db";
 import { Quest, User } from "../types/db";
-import { GoogleGenAI } from "@google/genai";
-import { generateReflectionProxy } from "../services/genaiProxy";
 
 export default function QuestComplete() {
   const location = useLocation();
@@ -220,44 +218,28 @@ export default function QuestComplete() {
     `;
 
     try {
-      const proxyUrl = import.meta.env.VITE_GENAI_PROXY_URL;
-      if (proxyUrl) {
-        // Use server-side proxy to keep API key secret
-        const proxyResp = await generateReflectionProxy(prompt);
-        // Proxy may return JSON text or a field `text`
-        let parsed: any = proxyResp;
-        if (proxyResp && proxyResp.text && typeof proxyResp.text === "string") {
-          try {
-            parsed = JSON.parse(proxyResp.text);
-          } catch (e) {
-            // if proxy returned something else, keep as text
-            parsed = {
-              strengths: proxyResp.text,
-              improvements: "",
-              creativity: 6,
-              critical_thinking: 6,
-              communication: 6,
-              collaboration: 6,
-            };
-          }
-        }
-        setAiReflection(parsed);
-        setAiError(null);
-      } else {
-        // If no proxy is configured, use offline analysis.
-        // Never use client-side API key.
-        console.warn("GENAI_PROXY_URL not set. Using offline analysis.");
-        const offline = offlineAnalyze(history, questData);
-        setAiReflection(offline);
-        setAiError("AI service is not configured. Using offline analysis.");
+      // Use server-side Vercel function to keep API key secret
+      const response = await fetch("/api/generateReflection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `API Error: ${response.status}`);
       }
-    } catch (error) {
+
+      const reflectionData = await response.json();
+      setAiReflection(reflectionData);
+      setAiError(null);
+    } catch (error: any) {
       console.error("Error generating AI reflection:", error);
       // If an unexpected error occurs, attempt offline analysis as final fallback
       const offline = offlineAnalyze(history, questData);
       setAiReflection(offline);
       setAiError(
-        "Unexpected error generating AI reflection (offline analysis used).",
+        `Unexpected error generating AI reflection (offline analysis used). Details: ${error.message}`,
       );
     } finally {
       setGeneratingReflection(false);
