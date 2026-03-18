@@ -185,15 +185,50 @@ export default function QuestSimulation() {
               const uqId = await startQuest(user.uid, questId);
               setUserQuestId(uqId);
 
-              // *** หมายเหตุ: โค้ดส่วนนี้เป็นการจำลองเนื้อเรื่องแบบมีลำดับขั้นสำหรับเควสต์ตัวอย่าง ***
-              // ในระบบจริง, questData.content ควรมีโครงสร้างตามประเภท QuestContent อยู่แล้ว
-              const content: QuestContent | null =
-                questId === DEMO_STORY_QUEST_ID
-                  ? storyContent
-                  : (questData as any).content?.nodes
-                    ? ((questData as any).content as QuestContent)
-                    : null;
+              let content: QuestContent | null = null;
 
+              // Use hardcoded story for the demo quest ID
+              if (questId === DEMO_STORY_QUEST_ID) {
+                content = storyContent;
+              }
+              // Check if quest from DB has the new node-based format
+              else if ((questData as any).content?.nodes) {
+                content = (questData as any).content as QuestContent;
+              }
+              // Check if quest from DB has the old single-choice format and convert it
+              else if (
+                (questData as any).content?.scenario &&
+                (questData as any).content?.choices
+              ) {
+                const simpleContent = (questData as any).content;
+                const finalNodeText =
+                  "การตัดสินใจของคุณถูกบันทึกแล้ว กำลังสรุปผล...";
+
+                // Convert simple choices to point to the final node
+                const convertedChoices = simpleContent.choices.map(
+                  (c: any) => ({
+                    ...c,
+                    next_node_id: "final_node",
+                  }),
+                );
+
+                // Construct a valid QuestContent structure from the simple format
+                content = {
+                  start_node_id: "start",
+                  nodes: {
+                    start: {
+                      ai_text: simpleContent.scenario,
+                      choices: convertedChoices,
+                    },
+                    final_node: {
+                      ai_text: finalNodeText,
+                      is_final: true,
+                    },
+                  },
+                };
+              }
+
+              // Now, if we have a valid content structure, proceed
               if (content && content.nodes && content.start_node_id) {
                 setQuestContent(content);
                 const startNode = content.nodes[content.start_node_id];
@@ -208,7 +243,7 @@ export default function QuestSimulation() {
                 }
               } else {
                 throw new Error(
-                  "Quest content is not in the expected story format.",
+                  "Quest content is not in the expected story format or is missing.",
                 );
               }
             } else {
