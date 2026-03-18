@@ -1,5 +1,3 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
 export const config = {
   runtime: "edge",
 };
@@ -26,23 +24,49 @@ export default async function handler(req: Request) {
       );
     }
 
-    // Using the SDK is cleaner for this task
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      generationConfig: {
-        temperature: 0.2,
-        responseMimeType: "application/json", // This is crucial for the reflection prompt
+    // Use fetch directly as the SDK can have issues in Edge runtime.
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.2,
+            response_mime_type: "application/json", // Crucial for the reflection prompt
+          },
+        }),
       },
-    });
+    );
 
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const text = response.text();
+    const data = await geminiResponse.json();
+
+    if (!geminiResponse.ok) {
+      console.error("Gemini API error:", data);
+      return new Response(
+        JSON.stringify({ error: data.error?.message || "Gemini API error" }),
+        {
+          status: geminiResponse.status,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const reflectionJsonString =
+      data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!reflectionJsonString) {
+      console.error("Invalid response structure from Gemini:", data);
+      return new Response(
+        JSON.stringify({ error: "Invalid response structure from AI" }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
 
     // The 'text' from a JSON response is a stringified JSON.
-    // We return it directly, and the client will parse it into a JavaScript object.
-    return new Response(text, {
+    // We return it directly, and the client will parse it.
+    return new Response(reflectionJsonString, {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
