@@ -35,10 +35,18 @@ const generateResponse = async (prompt: string): Promise<string> => {
     }
 
     const data = await response.json();
-    return (
-      data.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "AI ไม่ได้ส่งคำตอบกลับมา กรุณาลองอีกครั้ง"
-    );
+
+    // ตรวจสอบว่ามีข้อมูลคำตอบปกติหรือไม่
+    if (data.candidates && data.candidates.length > 0) {
+      return (
+        data.candidates[0].content?.parts?.[0]?.text ||
+        "AI ส่งคำตอบมาแต่ไม่มีข้อความ"
+      );
+    } else {
+      // ถ้าไม่มี candidates ให้ AI ปริ้นท์ก้อนข้อมูลออกมาเลยเพื่อดูว่าเกิดอะไรขึ้น
+      console.error("Gemini Response Data:", data);
+      return `ระบบ AI ตอบกลับมาผิดปกติ (ข้อมูล: ${JSON.stringify(data).substring(0, 150)}...)`;
+    }
   } catch (error) {
     console.error("Network or other error calling generateResponse:", error);
     return "ขออภัยค่ะ เกิดข้อผิดพลาดของระบบเครือข่าย กรุณาตรวจสอบการเชื่อมต่อและลองใหม่อีกครั้ง";
@@ -63,20 +71,25 @@ export default function QuestSimulation() {
         if (user && questId) {
           try {
             const questData = await getQuestById(questId);
-            if (questData && questData.content) {
+            if (questData) {
               setQuest(questData);
               const uqId = await startQuest(user.uid, questId);
               setUserQuestId(uqId);
+
+              const scenario =
+                (questData as any).content?.scenario ||
+                questData.description ||
+                "เริ่มจำลองสถานการณ์";
 
               setMessages([
                 {
                   id: 1,
                   sender: "ai",
-                  text: questData.content.scenario,
+                  text: scenario,
                 },
               ]);
             } else {
-              console.error("Quest not found or has no content");
+              console.error("Quest not found");
               navigate("/quests");
             }
           } catch (error) {
@@ -97,7 +110,7 @@ export default function QuestSimulation() {
   }, [questId, navigate]);
 
   const handleSend = async (text: string) => {
-    if (!text.trim() || !quest || !quest.content || questEnded) return;
+    if (!text.trim() || !quest || questEnded) return;
 
     const newUserMsg: Message = { id: Date.now(), sender: "user", text };
     const newMessages = [...messages, newUserMsg];
@@ -105,9 +118,12 @@ export default function QuestSimulation() {
     setInput("");
     setIsTyping(true);
 
+    const scenario =
+      (quest as any).content?.scenario || quest.description || "Quest Scenario";
+
     // Construct the prompt
     const history = newMessages.map((m) => `${m.sender}: ${m.text}`).join("\n");
-    const prompt = `Quest Scenario: ${quest.content.scenario}\n\nConversation History:\n${history}\n\nAI, as the mentor, your task is to respond to the user and guide them through the quest. When you feel the user has resolved the scenario, end your response with the token "[QUEST_COMPLETE]".\nAI:`;
+    const prompt = `Quest Scenario: ${scenario}\n\nConversation History:\n${history}\n\nAI, as the mentor, your task is to respond to the user and guide them through the quest. When you feel the user has resolved the scenario, end your response with the token "[QUEST_COMPLETE]".\nAI:`;
 
     const aiResponseText = await generateResponse(prompt);
 

@@ -26,6 +26,15 @@ export default async function handler(req: Request) {
     );
 
     const data = await response.json();
+
+    // ถ้า Gemini ตอบกลับมาเป็น Error (เช่น API Key ผิด) ให้ส่ง Status Code เดิมกลับไป
+    if (!response.ok) {
+      return new Response(JSON.stringify({ error: data }), {
+        status: response.status,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify(data), {
       status: 200,
       headers: { "Content-Type": "application/json" },
