@@ -30,7 +30,7 @@ import { Quest, User } from "../types/db";
 export default function QuestComplete() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { questId, chatHistory } = location.state || {};
+  const { questId, chatHistory, skillsRewarded } = location.state || {};
 
   const [quest, setQuest] = useState<Quest | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -67,11 +67,27 @@ export default function QuestComplete() {
               // Update skills (simplified logic for demo)
               const currentSkills = userProfile.skills || {};
               const updatedSkills = { ...currentSkills };
-              questData.skillsRewarded.forEach((skill) => {
-                updatedSkills[skill] = (updatedSkills[skill] || 20) + 5; // Add 5 points per skill
-              });
 
-              // Store initial data before AI finishes
+              // ใช้ skillsRewarded ที่ส่งมาจากหน้า simulation ถ้ามี
+              if (
+                skillsRewarded &&
+                Array.isArray(skillsRewarded) &&
+                skillsRewarded.length > 0
+              ) {
+                console.log("Updating skills based on path:", skillsRewarded);
+                skillsRewarded.forEach((skillId) => {
+                  if (skillId) {
+                    updatedSkills[skillId] = (updatedSkills[skillId] || 20) + 5; // Add 5 points per step
+                  }
+                });
+              } else {
+                // Fallback สำหรับเควสต์รูปแบบเก่า (ถ้ายังมี)
+                console.warn("Fallback: Updating skills from main quest data.");
+                questData.skillsRewarded.forEach((skill) => {
+                  updatedSkills[skill] = (updatedSkills[skill] || 20) + 5;
+                });
+              }
+
               setUser({
                 ...userProfile,
                 xp: newXp,
@@ -103,7 +119,7 @@ export default function QuestComplete() {
     };
 
     completeQuest();
-  }, [questId, navigate, chatHistory]);
+  }, [questId, navigate, chatHistory, skillsRewarded]);
 
   const generateReflection = async (
     questData: Quest,
@@ -464,15 +480,19 @@ export default function QuestComplete() {
                   </RadarChart>
                 </ResponsiveContainer>
               </div>
-              <div className="flex justify-center flex-wrap gap-2 mt-4 text-sm font-medium">
-                {quest?.skillsRewarded.map((skill, idx) => (
-                  <span
-                    key={idx}
-                    className="flex items-center text-green-600 bg-green-50 px-2 py-1 rounded-md"
-                  >
-                    <CheckCircle size={14} className="mr-1" /> {skill} +5
-                  </span>
-                ))}
+              {/* แสดงทักษะที่ได้รับจาก Path ที่เลือก */}
+              <div className="mt-4 flex flex-wrap justify-center gap-2 text-sm font-medium">
+                {(skillsRewarded || quest?.skillsRewarded || []).map(
+                  (skill, idx) => (
+                    <span
+                      key={idx}
+                      className="flex items-center rounded-md bg-green-50 px-2 py-1 text-green-600"
+                    >
+                      <CheckCircle size={14} className="mr-1" />{" "}
+                      <span className="capitalize">{skill}</span> +5
+                    </span>
+                  ),
+                )}
               </div>
             </section>
 
