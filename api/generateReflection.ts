@@ -26,7 +26,7 @@ export default async function handler(req: Request) {
 
     // Use fetch directly as the SDK can have issues in Edge runtime.
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, // Changed to gemini-pro for broader availability
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
