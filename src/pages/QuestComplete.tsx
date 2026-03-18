@@ -175,141 +175,81 @@ export default function QuestComplete() {
       };
     };
 
+    // Format chat history for the prompt
+    const formattedHistory = history
+      ? history
+          .map(
+            (msg: any) =>
+              `${msg.sender === "user" ? "นักเรียน" : "AI"}: ${msg.text}`,
+          )
+          .join("\n")
+      : "ไม่มีประวัติการสนทนา";
+
+    const prompt = `
+      คุณคือ AI Mentor ที่วิเคราะห์ประวัติการตัดสินใจของนักเรียนหลังจากทำเควสต์เสร็จสิ้น
+      ชื่อนักเรียน: ${userProfile.name || "นักเรียน"}
+      ชื่อเควสต์: ${questData.title}
+      รายละเอียดเควสต์: ${questData.description}
+      ทักษะที่ได้รับ: ${questData.skillsRewarded.join(", ")}
+
+      ประวัติการสนทนาระหว่างทำเควสต์:
+      ${formattedHistory}
+
+      กรุณาวิเคราะห์การตัดสินใจและพฤติกรรมของนักเรียนจากประวัติการสนทนา แล้ว:
+      1. ประเมินทักษะ 4Cs ด้วยคะแนน 1-10 (เต็ม 10):
+         - ความคิดสร้างสรรค์ (Creativity): ความสามารถในการหาทางแก้ปัญหาแบบเฉพาะตัว
+         - การคิดวิเคราะห์ (Critical Thinking): ความสามารถในการปรึกษาหารือและตัดสินใจอย่างมีเหตุผล
+         - การสื่อสาร (Communication): ความสามารถในการสื่อสารอย่างชัดเจนและประสิทธิผล
+         - ความเป็นทีม (Collaboration): ความสามารถในการท่างานเป็นกลุ่มและรับความคิดเห็นคนอื่น
+
+      2. เขียนคำสะท้อนคิด (Reflection) 2 ส่วน:
+         - จุดแข็ง: สิ่งที่นักเรียนทำได้ดี ชื่นชมในความพยายามหรือการตัดสินใจที่ถูกต้อง (2-3 ประโยค)
+         - สิ่งที่ควรพัฒนา: สิ่งที่นักเรียนสามารถปรับปรุงให้ดีขึ้นได้ (2-3 ประโยค)
+
+      🔴 กฎเหล็ก: ตอบกลับในรูปแบบ JSON เท่านั้น โดยมีโครงสร้างเป็นไปตามนี้:
+      {
+        "creativity": [ตัวเลข 1-10],
+        "critical_thinking": [ตัวเลข 1-10],
+        "communication": [ตัวเลข 1-10],
+        "collaboration": [ตัวเลข 1-10],
+        "strengths": "ข้อความจุดแข็ง...",
+        "improvements": "ข้อความสิ่งที่ควรพัฒนา..."
+      }
+
+      ห้ามมีข้อความเจือปน ห้ามใช้ Markdown ตอบเป็น JSON เท่านั้น
+    `;
+
     try {
       const proxyUrl = import.meta.env.VITE_GENAI_PROXY_URL;
       if (proxyUrl) {
         // Use server-side proxy to keep API key secret
-        try {
-          const proxyResp = await generateReflectionProxy(prompt);
-          // Proxy may return JSON text or a field `text`
-          let parsed: any = proxyResp;
-          if (
-            proxyResp &&
-            proxyResp.text &&
-            typeof proxyResp.text === "string"
-          ) {
-            try {
-              parsed = JSON.parse(proxyResp.text);
-            } catch (e) {
-              // if proxy returned something else, keep as text
-              parsed = {
-                strengths: proxyResp.text,
-                improvements: "",
-                creativity: 6,
-                critical_thinking: 6,
-                communication: 6,
-                collaboration: 6,
-              };
-            }
+        const proxyResp = await generateReflectionProxy(prompt);
+        // Proxy may return JSON text or a field `text`
+        let parsed: any = proxyResp;
+        if (proxyResp && proxyResp.text && typeof proxyResp.text === "string") {
+          try {
+            parsed = JSON.parse(proxyResp.text);
+          } catch (e) {
+            // if proxy returned something else, keep as text
+            parsed = {
+              strengths: proxyResp.text,
+              improvements: "",
+              creativity: 6,
+              critical_thinking: 6,
+              communication: 6,
+              collaboration: 6,
+            };
           }
-          setAiReflection(parsed);
-          setAiError(null);
-          setGeneratingReflection(false);
-          return;
-        } catch (err: any) {
-          console.warn(
-            "Proxy call failed, falling back to client-side AI:",
-            err,
-          );
-          // continue to try client-side call or offline fallback
         }
-      }
-
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) {
-        console.warn("Gemini API key not found. Using fallback reflection.");
+        setAiReflection(parsed);
+        setAiError(null);
+      } else {
+        // If no proxy is configured, use offline analysis.
+        // Never use client-side API key.
+        console.warn("GENAI_PROXY_URL not set. Using offline analysis.");
         const offline = offlineAnalyze(history, questData);
         setAiReflection(offline);
-        setGeneratingReflection(false);
-        return;
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
-
-      // Format chat history for the prompt
-      const formattedHistory = history
-        ? history
-            .map(
-              (msg) =>
-                `${msg.sender === "user" ? "นักเรียน" : "AI"}: ${msg.text}`,
-            )
-            .join("\n")
-        : "ไม่มีประวัติการสนทนา";
-
-      const prompt = `
-        คุณคือ AI Mentor ที่วิเคราะห์ประวัติการตัดสินใจของนักเรียนหลังจากทำเควสต์เสร็จสิ้น
-        ชื่อนักเรียน: ${userProfile.name || "นักเรียน"}
-        ชื่อเควสต์: ${questData.title}
-        รายละเอียดเควสต์: ${questData.description}
-        ทักษะที่ได้รับ: ${questData.skillsRewarded.join(", ")}
-
-        ประวัติการสนทนาระหว่างทำเควสต์:
-        ${formattedHistory}
-
-        กรุณาวิเคราะห์การตัดสินใจและพฤติกรรมของนักเรียนจากประวัติการสนทนา แล้ว:
-        1. ประเมินทักษะ 4Cs ด้วยคะแนน 1-10 (เต็ม 10):
-           - ความคิดสร้างสรรค์ (Creativity): ความสามารถในการหาทางแก้ปัญหาแบบเฉพาะตัว
-           - การคิดวิเคราะห์ (Critical Thinking): ความสามารถในการปรึกษาหารือและตัดสินใจอย่างมีเหตุผล
-           - การสื่อสาร (Communication): ความสามารถในการสื่อสารอย่างชัดเจนและประสิทธิผล
-           - ความเป็นทีม (Collaboration): ความสามารถในการท่างานเป็นกลุ่มและรับความคิดเห็นคนอื่น
-
-        2. เขียนคำสะท้อนคิด (Reflection) 2 ส่วน:
-           - จุดแข็ง: สิ่งที่นักเรียนทำได้ดี ชื่นชมในความพยายามหรือการตัดสินใจที่ถูกต้อง (2-3 ประโยค)
-           - สิ่งที่ควรพัฒนา: สิ่งที่นักเรียนสามารถปรับปรุงให้ดีขึ้นได้ (2-3 ประโยค)
-
-        🔴 กฎเหล็ก: ตอบกลับในรูปแบบ JSON เท่านั้น โดยมีโครงสร้างเป็นไปตามนี้:
-        {
-          "creativity": [ตัวเลข 1-10],
-          "critical_thinking": [ตัวเลข 1-10],
-          "communication": [ตัวเลข 1-10],
-          "collaboration": [ตัวเลข 1-10],
-          "strengths": "ข้อความจุดแข็ง...",
-          "improvements": "ข้อความสิ่งที่ควรพัฒนา..."
-        }
-
-        ห้ามมีข้อความเจือปน ห้ามใช้ Markdown ตอบเป็น JSON เท่านั้น
-      `;
-
-      // Retry logic: try up to 3 times before falling back to offline analysis
-      const maxRetries = 2;
-      let attempt = 0;
-      let lastError: any = null;
-      while (attempt <= maxRetries) {
-        try {
-          const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: prompt,
-            config: {
-              responseMimeType: "application/json",
-            },
-          });
-
-          if (response && response.text) {
-            const result = JSON.parse(response.text);
-            setAiReflection(result);
-            setAiError(null);
-            lastError = null;
-            break;
-          } else {
-            throw new Error("No text in response");
-          }
-        } catch (err: any) {
-          lastError = err;
-          console.warn(`Gemini attempt ${attempt + 1} failed:`, err);
-          if (attempt < maxRetries) {
-            // small backoff
-            await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
-            attempt += 1;
-            continue;
-          }
-          // all retries failed -> fallback
-          const offline = offlineAnalyze(history, questData);
-          setAiReflection(offline);
-          const msg =
-            err?.message || (err && JSON.stringify(err)) || "Unknown error";
-          setAiError(`AI service unavailable (using offline analysis). ${msg}`);
-          break;
-        }
+        setAiError("AI service is not configured. Using offline analysis.");
       }
     } catch (error) {
       console.error("Error generating AI reflection:", error);
